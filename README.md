@@ -87,9 +87,9 @@ Open four terminals:
     - Terminal #2: PostgreSQL (if not running as a service): ```net start postgresql-x64-14```<br/>
     - Terminal #3: ```cd backend```, ```venv\Scripts\activate```, ```uvicorn app.main:app --reload --port 8000```<br/>
     - Terminal #4: ```cd frontend```, ```npm run dev```
-11. Access Application
+11. Access Application<br/>
 Open http://localhost:3000 in browser, log in with demo credentials (if set up to seed)<br/>
 
-Start Chatting! 
+Start Chatting!<br/>
 
 Future Docker Setup to come to containerize the deployment via Docker Compose. 
