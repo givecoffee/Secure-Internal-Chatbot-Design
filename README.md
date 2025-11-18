@@ -66,7 +66,7 @@ Add dependencies:<br/>
 ```pip install -r requirements.txt```<br/>
 Configure env variables and .env, generate SECURE KEY and update file.<br/>
 Database migrations:<br/>
-```alembic upgrade head```
+```alembic upgrade head```<br/>
 Start backend server:<br/>
 ```uvicorn app.main:app --reload --host 0.0.0.0 --port 8000```<br/>
 API Base hosted:<br/>
