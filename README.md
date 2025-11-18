@@ -47,7 +47,7 @@ Setup:
 1. Clone repository
 ```git clone https://github.com/OC-Chatbot/Secure-Internal-Chatbot-Design.git```
 2. Install Ollama ([here](https://ollama.com/download/windows))
-3. Restart Git Bash, verify right version of model:
+3. Restart Git Bash, verify right version of model:<br/>
 ```ollama --version```<br/>
 ```ollama pull llama3.1```<br/>
 ```ollama serve``` 
@@ -57,28 +57,28 @@ Setup:
 ```ollama run llama3.1 "Are you ready to work, llama?"```
 6. Setup PostgreSQL Database ([download here](https://www.postgresql.org/download/windows))
 7. Create the database and the user
-8. Setup backend (Python/FastAPI)
-```cd backend```
-Either using Anaconda Navigator to open virtual environment use GitBash:
+8. Setup backend (Python/FastAPI)<br/>
+```cd backend```<br/>
+Either using Anaconda Navigator to open virtual environment use GitBash:<br/>
 ```python -m venv venv```<br/>
-```venv\Scripts\activate```
-Add dependencies:
-```pip install -r requirements.txt```
-Configure env variables and .env, generate SECURE KEY and update file.
-Database migrations:
+```venv\Scripts\activate```<br/>
+Add dependencies:<br/>
+```pip install -r requirements.txt```<br/>
+Configure env variables and .env, generate SECURE KEY and update file.<br/>
+Database migrations:<br/>
 ```alembic upgrade head```
-Start backend server:
-```uvicorn app.main:app --reload --host 0.0.0.0 --port 8000```
+Start backend server:<br/>
+```uvicorn app.main:app --reload --host 0.0.0.0 --port 8000```<br/>
 API Base hosted:<br/>
 http://localhost:8000<br/>
 Interactive Docs:<br/>
 http://localhost:8000/docs<br/>
-9. Setup frontend (Next.js/TypeScript)
+9. Setup frontend (Next.js/TypeScript)<br/>
 ```cd frontend```<br/>
-```npm install```
-Configure env variables and edit .env.local
+```npm install```<br/>
+Configure env variables and edit .env.local<br/>
 ```cp .env.example .env.local```<br/>
-```NEXT_PUBLIC_API_URL=http://localhost:8000```
+```NEXT_PUBLIC_API_URL=http://localhost:8000```<br/>
 Start development server:
 ```npm run dev```
 10. Run Application
