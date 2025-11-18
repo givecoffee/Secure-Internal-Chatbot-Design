@@ -11,7 +11,7 @@ We are designing a prototype for a secure, in-house chatbot system with the focu
 
 - Compliance with GDPR, HIPAA, SOC2, etc.
 - Protection for Intellectual Property
-- Run on internal, in-house infastructure
+- Run on internal, in-house infrastructure 
 - Provide articulate and helpful responses based on approved knowledge
 - Use authentication tools to secure interactions
 - Maintain audit logs as per compliance regulations
@@ -28,7 +28,7 @@ We are designing a prototype for a secure, in-house chatbot system with the focu
     - PostgreSQL
     - Vectors: pgvector/ChromaDB (RAG)
 4. LLM
-    - Ollama (Llama 3 or Mistral)
+    - Ollama (Llama 3.1 8B)
 5. Authentication
     - OAuth 2.0 (Secure token-based auth) 
 
