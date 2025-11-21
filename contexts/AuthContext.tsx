@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { authApi, User, LoginCredentials, RegisterData } from '@/lib/api/auth';
-import { ApiError } from '@/lib/api/client';
+import { ApiError, apiClient } from '@/lib/api/client';
 
 interface AuthContextType {
   user: User | null;
@@ -32,26 +32,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const applyUser = useCallback((nextUser: User | null) => {
+    setUser(nextUser);
+    apiClient.setUserId(nextUser?.id ?? null);
+  }, []);
+
   const refreshUser = useCallback(async () => {
     // In testing mode, automatically set mock user
     if (USE_MOCK_AUTH) {
-      setUser(MOCK_USER);
+      applyUser(MOCK_USER);
       setLoading(false);
       return;
     }
 
     try {
       const currentUser = await authApi.getCurrentUser();
-      setUser(currentUser);
+      applyUser(currentUser);
     } catch (error) {
-      setUser(null);
+      applyUser(null);
       if (error instanceof ApiError && error.status !== 401) {
         console.error('Failed to fetch user:', error);
       }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [applyUser]);
 
   useEffect(() => {
     refreshUser();
@@ -60,13 +65,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (credentials: LoginCredentials) => {
     // In testing mode, automatically succeed with mock user
     if (USE_MOCK_AUTH) {
-      setUser(MOCK_USER);
+      applyUser(MOCK_USER);
       return;
     }
 
     try {
       const response = await authApi.login(credentials);
-      setUser(response.user);
+      applyUser(response.user);
     } catch (error) {
       if (error instanceof ApiError) {
         throw error;
@@ -78,13 +83,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const register = async (data: RegisterData) => {
     // In testing mode, automatically succeed with mock user
     if (USE_MOCK_AUTH) {
-      setUser(MOCK_USER);
+      applyUser(MOCK_USER);
       return;
     }
 
     try {
       const response = await authApi.register(data);
-      setUser(response.user);
+      applyUser(response.user);
     } catch (error) {
       if (error instanceof ApiError) {
         throw error;
@@ -96,7 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     // In testing mode, just clear the user
     if (USE_MOCK_AUTH) {
-      setUser(null);
+      applyUser(null);
       return;
     }
 
@@ -105,7 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
-      setUser(null);
+      applyUser(null);
     }
   };
 
@@ -130,4 +135,3 @@ export function useAuth() {
   }
   return context;
 }
-

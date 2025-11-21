@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import List, Literal, Optional
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -54,8 +54,24 @@ class ChatHistoryResponse(BaseModel):
 
 # --- Data ---
 
-conversation_messages: dict[str, list[ChatMessage]] = {}
-conversation_metadata: dict[str, dict[str, datetime | str]] = {}
+conversation_messages: dict[str, dict[str, list[ChatMessage]]] = {}
+conversation_metadata: dict[str, dict[str, dict[str, datetime | str]]] = {}
+
+
+def _get_user_id(request: Request) -> str:
+    user_id = request.headers.get("x-user-id")
+    if not user_id:
+        raise HTTPException(status_code=400, detail="Missing X-User-Id header.")
+    return user_id
+
+
+def _get_user_message_store(user_id: str) -> dict[str, list[ChatMessage]]:
+    return conversation_messages.setdefault(user_id, {})
+
+
+def _get_user_metadata_store(user_id: str) -> dict[str, dict[str, datetime | str]]:
+    return conversation_metadata.setdefault(user_id, {})
+
 
 def _derive_title(text: str) -> str:
     cleaned = text.strip()
@@ -64,35 +80,37 @@ def _derive_title(text: str) -> str:
     return cleaned[:60] + ("..." if len(cleaned) > 60 else "")
 
 
-def _create_conversation(first_user_message: str) -> str:
+def _create_conversation(user_id: str, first_user_message: str) -> str:
+    user_meta = _get_user_metadata_store(user_id)
+    user_messages = _get_user_message_store(user_id)
     conv_id = str(uuid4())
     now = datetime.utcnow()
-    conversation_metadata[conv_id] = {
+    user_meta[conv_id] = {
         "title": _derive_title(first_user_message),
         "created_at": now,
         "updated_at": now,
     }
-    conversation_messages[conv_id] = []
+    user_messages[conv_id] = []
     return conv_id
 
 
-def _ensure_conversation(conversation_id: Optional[str], user_message: str) -> str:
-    if conversation_id and conversation_id in conversation_metadata:
+def _ensure_conversation(
+    user_id: str, conversation_id: Optional[str], user_message: str
+) -> str:
+    user_meta = _get_user_metadata_store(user_id)
+    if conversation_id and conversation_id in user_meta:
         return conversation_id
-    return _create_conversation(user_message)
+    return _create_conversation(user_id, user_message)
 
 
 def _store_message(
-    conversation_id: str, role: Literal["user", "assistant"], content: str
+    user_id: str, conversation_id: str, role: Literal["user", "assistant"], content: str
 ) -> ChatMessage:
-    if conversation_id not in conversation_messages:
-        now = datetime.utcnow()
-        conversation_messages[conversation_id] = []
-        conversation_metadata[conversation_id] = {
-            "title": "New Conversation",
-            "created_at": now,
-            "updated_at": now,
-        }
+    user_messages = _get_user_message_store(user_id)
+    user_meta = _get_user_metadata_store(user_id)
+
+    if conversation_id not in user_messages:
+        raise HTTPException(status_code=404, detail="Conversation not found.")
 
     message = ChatMessage(
         id=str(uuid4()),
@@ -101,9 +119,9 @@ def _store_message(
         timestamp=datetime.utcnow().isoformat(),
         conversationId=conversation_id,
     )
-    conversation_messages[conversation_id].append(message)
+    user_messages[conversation_id].append(message)
 
-    meta = conversation_metadata[conversation_id]
+    meta = user_meta[conversation_id]
     meta["updated_at"] = datetime.utcnow()
     if role == "user" and (not meta.get("title") or meta["title"] == "New Conversation"):
         meta["title"] = _derive_title(content)
@@ -111,8 +129,8 @@ def _store_message(
     return message
 
 
-def _build_prompt(conversation_id: str) -> str:
-    history = conversation_messages.get(conversation_id, [])
+def _build_prompt(user_id: str, conversation_id: str) -> str:
+    history = _get_user_message_store(user_id).get(conversation_id, [])
     recent_history = history[-10:]
 
     latest_user = next(
@@ -146,9 +164,15 @@ def _build_prompt(conversation_id: str) -> str:
     )
 
 
-def _conversation_summary(conversation_id: str) -> ConversationSummary:
-    meta = conversation_metadata[conversation_id]
-    messages = conversation_messages.get(conversation_id, [])
+def _conversation_summary(user_id: str, conversation_id: str) -> ConversationSummary:
+    user_meta = _get_user_metadata_store(user_id)
+    user_messages = _get_user_message_store(user_id)
+
+    if conversation_id not in user_meta:
+        raise HTTPException(status_code=404, detail="Conversation not found.")
+
+    meta = user_meta[conversation_id]
+    messages = user_messages.get(conversation_id, [])
 
     title = meta.get("title", "New Conversation")
     if (not title or title == "New Conversation") and messages:
@@ -173,35 +197,42 @@ async def root():
 
 
 @app.get("/api/chat/conversations", response_model=List[ConversationSummary])
-def list_conversations():
-    summaries = [_conversation_summary(conv_id) for conv_id in conversation_metadata]
+def list_conversations(request: Request):
+    user_id = _get_user_id(request)
+    user_meta = _get_user_metadata_store(user_id)
+
+    summaries = [_conversation_summary(user_id, conv_id) for conv_id in user_meta]
     summaries.sort(key=lambda s: s.updatedAt, reverse=True)
     return summaries
 
 
 @app.get("/api/chat/conversations/{conversation_id}", response_model=ChatHistoryResponse)
-def get_conversation(conversation_id: str):
-    if conversation_id not in conversation_messages:
+def get_conversation(conversation_id: str, request: Request):
+    user_id = _get_user_id(request)
+    user_messages = _get_user_message_store(user_id)
+
+    if conversation_id not in user_messages:
         raise HTTPException(status_code=404, detail="Conversation not found.")
 
     return ChatHistoryResponse(
-        messages=conversation_messages[conversation_id],
+        messages=user_messages[conversation_id],
         conversationId=conversation_id,
     )
 
 
 @app.post("/api/chat/message", response_model=SendMessageResponse)
-def chat_with_llm(req: SendMessageRequest):
+def chat_with_llm(req: SendMessageRequest, request: Request):
+    user_id = _get_user_id(request)
     message_text = req.message.strip()
     if not message_text:
         raise HTTPException(status_code=400, detail="Message must not be empty.")
 
-    conversation_id = _ensure_conversation(req.conversationId, message_text)
+    conversation_id = _ensure_conversation(user_id, req.conversationId, message_text)
 
     # Add the user message to history before calling the model
-    _store_message(conversation_id, "user", message_text)
+    _store_message(user_id, conversation_id, "user", message_text)
 
-    prompt = _build_prompt(conversation_id)
+    prompt = _build_prompt(user_id, conversation_id)
 
     try:
         reply_text = generate_text(
@@ -218,7 +249,7 @@ def chat_with_llm(req: SendMessageRequest):
     except Exception:
         raise HTTPException(status_code=500, detail="LLM generation failed.")
 
-    assistant_message = _store_message(conversation_id, "assistant", reply_text)
+    assistant_message = _store_message(user_id, conversation_id, "assistant", reply_text)
 
     return SendMessageResponse(
         message=assistant_message,
@@ -227,22 +258,29 @@ def chat_with_llm(req: SendMessageRequest):
 
 
 @app.delete("/api/chat/conversations/{conversation_id}")
-def delete_conversation(conversation_id: str):
-    if conversation_id not in conversation_metadata:
+def delete_conversation(conversation_id: str, request: Request):
+    user_id = _get_user_id(request)
+    user_meta = _get_user_metadata_store(user_id)
+
+    if conversation_id not in user_meta:
         raise HTTPException(status_code=404, detail="Conversation not found.")
 
-    conversation_metadata.pop(conversation_id, None)
-    conversation_messages.pop(conversation_id, None)
+    _get_user_message_store(user_id).pop(conversation_id, None)
+    user_meta.pop(conversation_id, None)
     return {"message": "Conversation deleted."}
 
 
 @app.delete("/api/chat/conversations/{conversation_id}/messages")
-def clear_conversation_messages(conversation_id: str):
-    if conversation_id not in conversation_metadata:
+def clear_conversation_messages(conversation_id: str, request: Request):
+    user_id = _get_user_id(request)
+    user_meta = _get_user_metadata_store(user_id)
+    user_messages = _get_user_message_store(user_id)
+
+    if conversation_id not in user_meta:
         raise HTTPException(status_code=404, detail="Conversation not found.")
 
-    conversation_messages[conversation_id] = []
-    conversation_metadata[conversation_id]["updated_at"] = datetime.utcnow()
+    user_messages[conversation_id] = []
+    user_meta[conversation_id]["updated_at"] = datetime.utcnow()
     return {"message": "Conversation messages cleared."}
 
 

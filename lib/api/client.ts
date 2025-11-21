@@ -19,6 +19,7 @@ export class ApiError extends Error {
 class ApiClient {
   private baseUrl: string;
   private defaultHeaders: HeadersInit;
+  private userIdKey = 'auth_user_id';
 
   constructor() {
     this.baseUrl = API_BASE_URL;
@@ -32,6 +33,7 @@ class ApiClient {
     options: RequestInit = {}
   ): Promise<T> {
     const token = this.getToken();
+    const userId = this.getUserId();
     const headers: HeadersInit = {
       ...this.defaultHeaders,
       ...options.headers,
@@ -39,6 +41,9 @@ class ApiClient {
 
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
+    }
+    if (userId) {
+      headers['X-User-Id'] = userId;
     }
 
     const url = `${this.baseUrl}${endpoint}`;
@@ -76,11 +81,24 @@ class ApiClient {
     return localStorage.getItem('auth_token');
   }
 
+  private getUserId(): string | null {
+    if (typeof window === 'undefined') return null;
+    return localStorage.getItem(this.userIdKey);
+  }
+
   setToken(token: string | null): void {
     if (token) {
       localStorage.setItem('auth_token', token);
     } else {
       localStorage.removeItem('auth_token');
+    }
+  }
+
+  setUserId(userId: string | null): void {
+    if (userId) {
+      localStorage.setItem(this.userIdKey, userId);
+    } else {
+      localStorage.removeItem(this.userIdKey);
     }
   }
 
@@ -110,4 +128,3 @@ class ApiClient {
 }
 
 export const apiClient = new ApiClient();
-

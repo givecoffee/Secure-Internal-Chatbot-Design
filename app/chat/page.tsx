@@ -19,16 +19,29 @@ function ChatPageContent() {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    if (!user) {
+      setConversations([]);
+      setCurrentConversationId(undefined);
+      setMessages([]);
+      return;
+    }
+    setCurrentConversationId(undefined);
+    setMessages([]);
+    setError('');
     loadConversations();
-  }, []);
+  }, [user]);
 
   useEffect(() => {
+    if (!user) {
+      return;
+    }
+
     if (currentConversationId) {
       loadConversationHistory(currentConversationId);
     } else {
       setMessages([]);
     }
-  }, [currentConversationId]);
+  }, [currentConversationId, user]);
 
   const loadConversations = async () => {
     try {
@@ -50,6 +63,11 @@ function ChatPageContent() {
   };
 
   const handleSendMessage = async (messageText: string) => {
+    if (!user) {
+      setError('You must be logged in to send a message.');
+      return;
+    }
+
     setIsLoading(true);
     setError('');
 
@@ -230,4 +248,3 @@ export default function ChatPage() {
     </ProtectedRoute>
   );
 }
-
