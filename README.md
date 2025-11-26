@@ -26,15 +26,15 @@ We are designing a prototype for a secure, in-house chatbot system with the focu
     - Python
     - FastAPI
 3. LLM
-    - Hugging Face (TinyLlama-1.1B-Chat)
+    - Ollama (TinyLlama-1.1B-Chat)
 4. Authentication
     - Basic token support (WIP)
 
 ## Setup & Installation
 
 ### Prerequisites
-- Python 3.10+
-- Node.js 18+ (with npm)
+- Python 3.12+
+- Node.js 24+ (with npm)
 - Git
 
 ### 1) Clone the repo
