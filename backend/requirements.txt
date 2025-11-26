@@ -1,5 +1,6 @@
 fastapi==0.115.2
 uvicorn[standard]==0.30.6
 pydantic==2.9.2
-torch==2.9.0
-transformers==4.46.1
+psycopg2-binary==2.9.9
+requests==2.31.0
+python-dotenv==1.0.0

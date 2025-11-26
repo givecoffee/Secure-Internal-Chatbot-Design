@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from backend.llm_model import generate_text
+from backend.database import augment_prompt_with_context
 
 
 app = FastAPI(title="Opportunity Center Chat Backend", version="1.0.0")
@@ -155,13 +156,17 @@ def _build_prompt(user_id: str, conversation_id: str) -> str:
         "Keep replies under 80 words."
     )
 
-    return (
-        f"{system}\n\n"
+    conversation_context = (
         f"Recent conversation:\n{history_block}\n\n"
         f"Answer the latest user question once. Do not add new questions.\n"
         f"Latest question: {latest_content}\n"
         f"Answer:"
     )
+    
+    # Apply RAG - augment prompt with relevant FAQ context
+    augmented_context = augment_prompt_with_context(latest_content, conversation_context)
+
+    return f"{system}\n\n{augmented_context}"
 
 
 def _conversation_summary(user_id: str, conversation_id: str) -> ConversationSummary:
@@ -246,8 +251,8 @@ def chat_with_llm(req: SendMessageRequest, request: Request):
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception:
-        raise HTTPException(status_code=500, detail="LLM generation failed.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"LLM generation failed: {str(e)}")
 
     assistant_message = _store_message(user_id, conversation_id, "assistant", reply_text)
 
@@ -282,7 +287,6 @@ def clear_conversation_messages(conversation_id: str, request: Request):
     user_messages[conversation_id] = []
     user_meta[conversation_id]["updated_at"] = datetime.utcnow()
     return {"message": "Conversation messages cleared."}
-
 
 
 if __name__ == "__main__":

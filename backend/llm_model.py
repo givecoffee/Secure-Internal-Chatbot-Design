@@ -1,67 +1,31 @@
-# backend/llm_model.py
-
-import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM
+import requests
 import os
-import sys
+from dotenv import load_dotenv
 
-print("[llm_model] sys.executable:", sys.executable)
-print("[llm_model] CUDA_VISIBLE_DEVICES:",
-      os.environ.get("CUDA_VISIBLE_DEVICES"))
-print("[llm_model] torch version:", torch.__version__)
-print("[llm_model] torch.version.cuda:", torch.version.cuda)
-print("[llm_model] torch.cuda.is_available():", torch.cuda.is_available())
+load_dotenv()
 
-
-# Small but modern chat model
-MODEL_NAME = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
-
-if torch.cuda.is_available():
-    DEVICE = "cuda"
-    MODEL_KWARGS = {"torch_dtype": torch.float16}
-elif getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
-    DEVICE = "mps"
-    MODEL_KWARGS = {"torch_dtype": torch.float16}
-else:
-    DEVICE = "cpu"
-    MODEL_KWARGS = {}
-
-print(f"[llm_model] Using device: {DEVICE}")
-
-# Use fast tokenizer (no sentencepiece python package needed)
-tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, use_fast=True)
-
-# Ensure we have a pad token
-if tokenizer.pad_token is None:
-    tokenizer.pad_token = tokenizer.eos_token
-
-# Load the model in standard precision
-# If you have GPU, you can use float16; otherwise default dtype is fine.
-model = AutoModelForCausalLM.from_pretrained(
-    MODEL_NAME, **MODEL_KWARGS).to(DEVICE)
-
-model.eval()
-
+OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "tinyllama")
 
 def generate_text(
     prompt: str,
-    max_new_tokens: int = 60,   # lower default
-    temperature: float = 0.4,   # safer default
-    top_p: float = 0.9,
-    do_sample: bool = True,
-    repetition_penalty: float = 1.05,
-    wrap_prompt: bool = True,   # when False, use prompt as-is (for chat history)
-    strip_after: str | None = None,  # if provided, trim decoded text after this marker
+    max_new_tokens: int = 80,
+    temperature: float = 0.2,
+    top_p: float = 0.8,
+    do_sample: bool = False,
+    wrap_prompt: bool = True,
+    strip_after: str | None = None,
 ) -> str:
+    """Generate text using Ollama API instead of local transformers."""
+    
     if not prompt:
         raise ValueError("Prompt must not be empty.")
-
+    
     if wrap_prompt:
         system_instruction = (
-            "You are a helpful, knowledgeable AI assistant. "
+            "You are a helpful, knowledgeable AI assistant for the Opportunity Center. "
             "Answer the following question clearly and concisely."
         )
-
         full_prompt = (
             system_instruction
             + "\n\nQuestion:\n"
@@ -70,26 +34,29 @@ def generate_text(
         )
     else:
         full_prompt = prompt.strip()
-
-    inputs = tokenizer(full_prompt, return_tensors="pt").to(DEVICE)
-
-    with torch.no_grad():
-        output_ids = model.generate(
-            **inputs,
-            max_new_tokens=max_new_tokens,
-            temperature=temperature,
-            top_p=top_p,
-            do_sample=do_sample,
-            repetition_penalty=repetition_penalty,
-            pad_token_id=tokenizer.pad_token_id,
+    
+    try:
+        response = requests.post(
+            f"{OLLAMA_API_URL}/api/generate",
+            json={
+                "model": OLLAMA_MODEL,
+                "prompt": full_prompt,
+                "stream": False,
+                "temperature": temperature,
+                "top_p": top_p,
+            },
+            timeout=30,
         )
-
-    full_text = tokenizer.decode(output_ids[0], skip_special_tokens=True)
-
-    # Only strip by "Answer:" when we used the default QA wrapper
-    if wrap_prompt and "Answer:" in full_text:
-        full_text = full_text.split("Answer:", 1)[1]
-    elif strip_after and strip_after in full_text:
-        full_text = full_text.split(strip_after, 1)[1]
-
-    return full_text.strip()
+        response.raise_for_status()
+        result = response.json()
+        reply_text = result.get("response", "").strip()
+        
+        # Strip after marker if provided
+        if strip_after and strip_after in reply_text:
+            reply_text = reply_text.split(strip_after, 1)[1].strip()
+        elif wrap_prompt and "Answer:" in reply_text:
+            reply_text = reply_text.split("Answer:", 1)[1].strip()
+        
+        return reply_text
+    except requests.exceptions.RequestException as e:
+        raise Exception(f"Ollama API error: {str(e)}")
