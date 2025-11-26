@@ -40,10 +40,10 @@ class ApiClient {
     };
 
     if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+      (headers as any)['Authorization'] = `Bearer ${token}`;
     }
     if (userId) {
-      headers['X-User-Id'] = userId;
+      (headers as any)['X-User-Id'] = userId;
     }
 
     const url = `${this.baseUrl}${endpoint}`;

@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from backend.llm_model import generate_text
 from backend.database import augment_prompt_with_context
+from backend.auth import create_access_token, verify_token, register_user, authenticate_user
 
 
 app = FastAPI(title="Opportunity Center Chat Backend", version="1.0.0")
@@ -17,11 +18,13 @@ app = FastAPI(title="Opportunity Center Chat Backend", version="1.0.0")
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Next.js frontend
+    allow_origins=["http://localhost:3000", "https://oc.raemaffei.com"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --- Data Models ---
 
 class ChatMessage(BaseModel):
     id: str
@@ -53,11 +56,24 @@ class ChatHistoryResponse(BaseModel):
     messages: List[ChatMessage]
     conversationId: str
 
-# --- Data ---
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+
+
+# --- Chat Data Storage ---
 
 conversation_messages: dict[str, dict[str, list[ChatMessage]]] = {}
 conversation_metadata: dict[str, dict[str, dict[str, datetime | str]]] = {}
 
+
+# --- Helper Functions ---
 
 def _get_user_id(request: Request) -> str:
     user_id = request.headers.get("x-user-id")
@@ -194,12 +210,53 @@ def _conversation_summary(user_id: str, conversation_id: str) -> ConversationSum
         messageCount=len(messages),
     )
 
-# --- Endpoints ---
+
+# --- Health Check ---
 
 @app.get("/")
 async def root():
     return {"message": "Opportunity Center Chat API", "status": "ok"}
 
+
+# --- Authentication Endpoints ---
+
+@app.post("/api/auth/register")
+def register(req: RegisterRequest):
+    result = register_user(req.email, req.password)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    
+    token = create_access_token({"sub": req.email})
+    return {"token": token, "email": req.email}
+
+
+@app.post("/api/auth/login")
+def login(req: LoginRequest):
+    user = authenticate_user(req.email, req.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    token = create_access_token({"sub": req.email})
+    return {"token": token, "email": req.email}
+
+
+@app.get("/api/auth/me")
+def get_me(request: Request):
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        raise HTTPException(status_code=401, detail="No authorization header")
+    
+    try:
+        token = auth_header.split(" ")[1]
+        email = verify_token(token)
+        if not email:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return {"email": email}
+    except:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+
+# --- Chat Endpoints ---
 
 @app.get("/api/chat/conversations", response_model=List[ConversationSummary])
 def list_conversations(request: Request):

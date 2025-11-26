@@ -5,6 +5,7 @@
 import { apiClient } from './client';
 import { User } from './auth';
 
+
 export interface AdminStats {
   totalUsers: number;
   totalConversations: number;
@@ -50,3 +51,4 @@ export const adminApi = {
   },
 };
 
+export type {User};
