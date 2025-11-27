@@ -79,3 +79,34 @@ npm run dev -- --port 3000
 ### Notes
 - The backend loads the TinyLlama model from Hugging Face; first run requires network access or a pre-cached model in your HF cache.
 - Configure `NEXT_PUBLIC_API_URL` if your backend runs on a different host/port. You can export it before `npm run dev` or set it in `.env.local`.
+
+### Auto Start on VPS Reboot ### 
+The application runs automatically on VPS reboot via systemd services.
+
+### Backend Service
+- File: `/etc/systemd/system/oc-backend.service`
+- Start: `sudo systemctl start oc-backend.service`
+- Status: `sudo systemctl status oc-backend.service`
+
+### Frontend Service
+- File: `/etc/systemd/system/oc-frontend.service`
+- Start: `sudo systemctl start oc-frontend.service`
+- Status: `sudo systemctl status oc-frontend.service`
+
+### To Install on New Server
+```bash
+cd /root/Secure-Internal-Chatbot-Design
+
+# Create backend service
+sudo nano /etc/systemd/system/oc-backend.service
+# [Paste backend service config]
+
+# Create frontend service
+sudo nano /etc/systemd/system/oc-frontend.service
+# [Paste frontend service config]
+
+# Enable and start
+sudo systemctl daemon-reload
+sudo systemctl enable oc-backend.service oc-frontend.service
+sudo systemctl start oc-backend.service oc-frontend.service
+```
