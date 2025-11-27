@@ -12,7 +12,8 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const response = await fetch('/api/auth/login', {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://oc.raemaffei.com/api';
+      const response = await fetch(`${baseUrl}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -21,9 +22,8 @@ export default function LoginPage() {
       if (!response.ok) throw new Error('Login failed');
       
       const data = await response.json();
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('userId', email);
-      
+      localStorage.setItem('auth_token', data.token);
+      localStorage.setItem('auth_user_id', email);  
       router.push('/chat');
     } catch (err) {
       setError('Invalid credentials');
@@ -33,8 +33,8 @@ export default function LoginPage() {
   return (
     <form onSubmit={handleLogin}>
       {error && <p>{error}</p>}
-      <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
-      <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" type="password" />
+      <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" required />
+      <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" type="password" required />
       <button type="submit">Sign in</button>
     </form>
   );
